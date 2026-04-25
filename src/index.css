@@ -70,3 +70,19 @@ a { text-decoration: none; color: inherit; }
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(1); }
+  50%       { opacity: 0.9;  transform: scale(1.4); }
+}
+
+/* Scrolling avatars */
+@keyframes scrollAvatars {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.avatars-track {
+  display: flex;
+  animation: scrollAvatars 18s linear infinite;
+  width: max-content;
+}

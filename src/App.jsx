@@ -8,6 +8,9 @@ import ChangeAvatarPage from './pages/ChangeAvatarPage';
 import CreateTeacherPage from './pages/CreateTeacherPage';
 import TermsPage from './pages/TermsPage';
 import { useProfile } from './lib/useProfile';
+import { isModerator } from './lib/roles';
+import WelcomePage from './pages/WelcomePage';
+import BetaCodePage from './pages/BetaCodePage';
 
 export default function App() {
   const { profile, session, refresh } = useProfile();
@@ -16,6 +19,31 @@ export default function App() {
 
   // ждём пока определится сессия
   if (session === undefined) return null;
+
+  // период тестирования — все видят welcome
+  if (session && profile) {
+    if (screen === 'beta-code') {
+      return (
+        <AnimatePresence mode="wait">
+          <BetaCodePage
+            key="beta-code"
+            onBack={() => setScreen(null)}
+            onSuccess={() => setScreen('app')}
+          />
+        </AnimatePresence>
+      );
+    }
+    if (screen !== 'app') {
+      return <WelcomePage profile={profile} onOpenBetaCode={() => {
+        // если уже вводил код раньше — сразу пускаем
+        if (localStorage.getItem('beta_unlocked')) {
+          setScreen('app');
+        } else {
+          setScreen('beta-code');
+        }
+      }} />;
+    }
+  }
 
   function handleSaved() {
     refresh();
