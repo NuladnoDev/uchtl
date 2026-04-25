@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { motion } from 'motion/react';
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '../lib/supabase';
 
 const FAKE_AVATARS = [
   'https://i.pravatar.cc/40?img=1',
@@ -91,7 +92,24 @@ function ShareBlock() {
 }
 
 function AvatarsCounter() {
-  const doubled = [...FAKE_AVATARS, ...FAKE_AVATARS];
+  const [count, setCount] = useState(47);
+  const [avatars, setAvatars] = useState(FAKE_AVATARS);
+
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('id, avatar_url, username', { count: 'exact' })
+      .limit(12)
+      .then(({ data, count: total }) => {
+        if (total) setCount(total);
+        if (data?.length) {
+          setAvatars(data.map(p =>
+            p.avatar_url || `https://i.pravatar.cc/40?u=${p.id}`
+          ));
+        }
+      });
+  }, []);
+  const doubled = [...avatars, ...avatars];
   return (
     <Reveal style={{ padding: '0 16px', marginBottom: 32 }}>
       <div style={{
@@ -102,7 +120,7 @@ function AvatarsCounter() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: 20, marginBottom: 14 }}>
           <div>
             <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>
-              47 <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.4)' }}>уже зарегистрировались</span>
+              {count} <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.4)' }}>уже зарегистрировались</span>
             </div>
           </div>
         </div>
