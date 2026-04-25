@@ -3,12 +3,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import { avatarGradients, hashCode } from '../data/teachers';
 import { photos } from '../data/photos';
 import { supabase } from '../lib/supabase';
+import CommentSheet from '../components/CommentSheet';
+import { isModerator } from '../lib/roles';
+
+function getUsername(session) {
+  const email = session?.user?.email || '';
+  return email.replace('@uchtl.app', '');
+}
 
 function MiniAvatar({ name, tag, avatar, size = 34 }) {
   if (avatar) {
     return <img src={avatar} alt={name} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />;
   }
-  const gradient = avatarGradients[hashCode(tag) % avatarGradients.length];
+  const gradient = avatarGradients[hashCode(tag || name || 'user') % avatarGradients.length];
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%', flexShrink: 0,
@@ -20,16 +27,29 @@ function MiniAvatar({ name, tag, avatar, size = 34 }) {
   );
 }
 
-export default function TeacherPage({ teacher, teacherIndex, onBack }) {
-  const photo = photos[teacherIndex % photos.length];
+export default function TeacherPage({ teacher, teacherIndex, onBack, onOpenTerms, onDeleted }) {
+  const photo = teacher.photo_url || photos[teacherIndex % photos.length];
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState(null);
+  const [activeComment, setActiveComment] = useState(null);
+  const [editingComment, setEditingComment] = useState(null);
+  const [editText, setEditText] = useState('');
   const inputRef = useRef(null);
   const bottomRef = useRef(null);
+  const pressTimer = useRef(null);
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (data.session) {
+        supabase.from('profiles').select('*').eq('id', data.session.user.id).single()
+          .then(({ data: p }) => setProfile(p));
+      }
+    });
     supabase
       .from('comments')
       .select('*')
@@ -45,17 +65,57 @@ export default function TeacherPage({ teacher, teacherIndex, onBack }) {
     if (!text.trim()) return;
     const newComment = {
       teacher_id: teacher.id,
-      author: 'Аноним',
+      author: getUsername(session) || 'Аноним',
       text: text.trim(),
       reply_to: replyTo?.id ?? null,
     };
     const { data, error } = await supabase.from('comments').insert(newComment).select().single();
     if (!error && data) {
       setComments(prev => [...prev, data]);
+      navigator.vibrate?.(40);
     }
     setText('');
     setReplyTo(null);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 80);
+  }
+
+  async function deleteTeacher() {
+    if (!window.confirm(`Удалить учителя «${teacher.name}»?`)) return;
+    const { error } = await supabase.from('teachers').delete().eq('id', teacher.id);
+    if (error) { alert('Ошибка: ' + error.message); return; }
+    onDeleted?.();
+  }
+
+  async function deleteComment(id) {
+    await supabase.from('comments').delete().eq('id', id);
+    setComments(prev => prev.filter(c => c.id !== id));
+    setActiveComment(null);
+  }
+
+  async function saveEdit() {
+    if (!editText.trim() || !editingComment) return;
+    const { data } = await supabase
+      .from('comments')
+      .update({ text: editText.trim() })
+      .eq('id', editingComment.id)
+      .select()
+      .single();
+    if (data) setComments(prev => prev.map(c => c.id === data.id ? data : c));
+    setEditingComment(null);
+    setEditText('');
+    setActiveComment(null);
+  }
+
+  function handleLongPress(comment) {
+    setActiveComment(comment);
+  }
+
+  function startPress(comment) {
+    pressTimer.current = setTimeout(() => handleLongPress(comment), 500);
+  }
+
+  function cancelPress() {
+    clearTimeout(pressTimer.current);
   }
 
   return (
@@ -93,7 +153,7 @@ export default function TeacherPage({ teacher, teacherIndex, onBack }) {
         paddingBottom: 24,
       }}>
         {/* Hero card */}
-        <div style={{ position: 'relative', margin: '0 16px', borderRadius: 20, overflow: 'hidden', height: 280 }}>
+        <div style={{ position: 'relative', width: '100%', overflow: 'hidden', height: 320 }}>
           <img src={photo} alt={teacher.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           <div style={{
             position: 'absolute', inset: 0,
@@ -115,13 +175,49 @@ export default function TeacherPage({ teacher, teacherIndex, onBack }) {
           </div>
         </div>
 
+        {/* Mod: delete teacher */}
+        {isModerator(profile) && (
+          <div style={{ padding: '12px 16px 0' }}>
+            <button
+              onClick={deleteTeacher}
+              style={{
+                width: '100%', height: 46, borderRadius: 12, border: 'none',
+                background: 'rgba(212,94,94,0.1)',
+                fontSize: 15, fontWeight: 600,
+                fontFamily: "'Nunito', sans-serif",
+                color: 'var(--danger)', cursor: 'pointer',
+              }}
+            >
+              Удалить учителя
+            </button>
+          </div>
+        )}
+
         {/* Comments section */}
         <div style={{ padding: '20px 16px 0' }}>
 
           {/* Input — above comments */}
           <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.4 }}>
+              Оставляя комментарий, вы принимаете{' '}
+              <span style={{ textDecoration: 'underline', cursor: 'pointer' }} onClick={onOpenTerms}>
+                пользовательское соглашение
+              </span>
+            </div>
             <AnimatePresence>
-              {replyTo && (
+              {editingComment && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}
+                >
+                  <span style={{ color: '#FFD900', fontWeight: 600 }}>Редактирование</span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{editingComment.text}</span>
+                  <button onClick={() => { setEditingComment(null); setEditText(''); }} style={{ color: 'var(--text-muted)', fontSize: 20, lineHeight: 1 }}>×</button>
+                </motion.div>
+              )}
+              {!editingComment && replyTo && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
@@ -137,34 +233,34 @@ export default function TeacherPage({ teacher, teacherIndex, onBack }) {
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
               <textarea
                 ref={inputRef}
-                value={text}
-                onChange={e => setText(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(); } }}
+                value={editingComment ? editText : text}
+                onChange={e => editingComment ? setEditText(e.target.value) : setText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); editingComment ? saveEdit() : addComment(); } }}
                 placeholder="Написать комментарий..."
                 rows={1}
                 style={{
                   flex: 1, background: 'var(--surface-2)',
-                  border: '1px solid transparent', borderRadius: 22,
+                  border: `1px solid ${editingComment ? 'rgba(255,215,0,0.3)' : 'transparent'}`, borderRadius: 22,
                   padding: '11px 16px', fontSize: 16,
                   color: 'var(--text-primary)', outline: 'none',
                   resize: 'none', lineHeight: 1.4, maxHeight: 100, overflowY: 'auto',
                   verticalAlign: 'top',
                 }}
-                onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
-                onBlur={e => e.target.style.borderColor = 'transparent'}
+                onFocus={e => { if (!editingComment) e.target.style.borderColor = 'rgba(255,255,255,0.15)'; }}
+                onBlur={e => { if (!editingComment) e.target.style.borderColor = 'transparent'; }}
                 onInput={e => { e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px'; }}
               />
               <button
-                onClick={addComment}
-                disabled={!text.trim()}
+                onClick={editingComment ? saveEdit : addComment}
+                disabled={editingComment ? !editText.trim() : !text.trim()}
                 style={{
                   width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
-                  background: text.trim() ? 'var(--accent)' : 'var(--surface-2)',
+                  background: (editingComment ? editText.trim() : text.trim()) ? (editingComment ? '#FFD900' : 'var(--accent)') : 'var(--surface-2)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'background 0.15s',
                 }}
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={editingComment ? '#000' : 'white'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 19V5" />
                   <path d="M5 12l7-7 7 7" />
                 </svg>
@@ -205,7 +301,14 @@ export default function TeacherPage({ teacher, teacherIndex, onBack }) {
                     display: 'flex', gap: 10, alignItems: 'flex-start',
                     padding: '12px 0',
                     borderBottom: i < comments.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                    userSelect: 'none',
                   }}
+                  onMouseDown={() => startPress(c)}
+                  onMouseUp={cancelPress}
+                  onMouseLeave={cancelPress}
+                  onTouchStart={() => startPress(c)}
+                  onTouchEnd={cancelPress}
+                  onTouchMove={cancelPress}
                 >
                   <MiniAvatar name={c.author} tag={c.tag} avatar={c.avatar} />
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -244,6 +347,24 @@ export default function TeacherPage({ teacher, teacherIndex, onBack }) {
           <div ref={bottomRef} />
         </div>
       </div>
+
+      <AnimatePresence>
+        {activeComment && (
+          <CommentSheet
+            comment={activeComment}
+            isOwn={activeComment.author === getUsername(session)}
+            isMod={isModerator(profile)}
+            onClose={() => setActiveComment(null)}
+            onDelete={() => deleteComment(activeComment.id)}
+            onEdit={() => {
+              setEditingComment(activeComment);
+              setEditText(activeComment.text);
+              setActiveComment(null);
+              setTimeout(() => inputRef.current?.focus(), 100);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

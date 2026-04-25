@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { photos } from '../data/photos';
 
 export default function TeacherCard({ teacher, onClick, index }) {
-  const photo = photos[index % photos.length];
+  const photo = teacher.photo_url || photos[index % photos.length];
   const comments = teacher.previewComments?.slice(0, 2) || [];
 
   return (
@@ -20,7 +20,7 @@ export default function TeacherCard({ teacher, onClick, index }) {
           borderRadius: 20,
           overflow: 'hidden',
           cursor: 'pointer',
-          aspectRatio: '3/4',
+          aspectRatio: '4/5',
           background: '#1a1a1a',
         }}
       >
@@ -51,9 +51,6 @@ export default function TeacherCard({ teacher, onClick, index }) {
 
         {/* Bottom text */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 16px 18px' }}>
-          <span style={{ fontSize: 20, fontWeight: 700, color: '#fff', letterSpacing: '-0.3px', display: 'block', marginBottom: 4 }}>
-            {teacher.name}
-          </span>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 20, fontWeight: 700, color: '#fff', letterSpacing: '-0.3px' }}>
               {teacher.name}
