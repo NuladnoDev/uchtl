@@ -224,7 +224,7 @@ export default function TeacherPage({ teacher, teacherIndex, onBack, onOpenTerms
                   exit={{ opacity: 0, height: 0 }}
                   style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13, color: 'var(--text-secondary)' }}
                 >
-                  <span style={{ color: 'var(--accent)', fontWeight: 600 }}>&gt;&gt;{replyTo.id}</span>
+                  <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{replyTo.author}</span>
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{replyTo.text}</span>
                   <button onClick={() => setReplyTo(null)} style={{ color: 'var(--text-muted)', fontSize: 20, lineHeight: 1 }}>×</button>
                 </motion.div>

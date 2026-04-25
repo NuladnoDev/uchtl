@@ -51,7 +51,7 @@ export default function App() {
 
   function handleSaved() {
     refresh();
-    setScreen(null);
+    setScreen('app');
   }
 
   return (
@@ -64,9 +64,9 @@ export default function App() {
         ) : screen === 'change-avatar' ? (
           <ChangeAvatarPage key="change-avatar" profile={profile} onBack={() => setScreen(null)} onSaved={handleSaved} />
         ) : screen === 'create-teacher' ? (
-          <CreateTeacherPage key="create-teacher" onBack={() => setScreen(null)} onSaved={() => setScreen(null)} />
+          <CreateTeacherPage key="create-teacher" onBack={() => setScreen('app')} onSaved={() => setScreen('app')} />
         ) : screen === 'terms' ? (
-          <TermsPage key="terms" onBack={() => setScreen(null)} />
+          <TermsPage key="terms" onBack={() => setScreen('app')} />
         ) : selected ? (
           <TeacherPage
             key={`teacher-${selected.teacher.id}`}
