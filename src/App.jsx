@@ -20,6 +20,9 @@ export default function App() {
   // ждём пока определится сессия
   if (session === undefined) return null;
 
+  // ждём загрузки профиля
+  if (session && !profile) return null;
+
   // период тестирования — все видят welcome
   if (session && profile) {
     if (screen === 'beta-code') {
