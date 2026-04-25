@@ -23,6 +23,8 @@ export default function App() {
   // ждём загрузки профиля
   if (session && !profile) return null;
 
+  const APP_SCREENS = ['app', 'change-username', 'change-avatar', 'create-teacher', 'terms'];
+
   // период тестирования — все видят welcome
   if (session && profile) {
     if (screen === 'beta-code') {
@@ -36,9 +38,8 @@ export default function App() {
         </AnimatePresence>
       );
     }
-    if (screen !== 'app') {
+    if (!APP_SCREENS.includes(screen)) {
       return <WelcomePage profile={profile} onOpenBetaCode={() => {
-        // если уже вводил код раньше — сразу пускаем
         if (localStorage.getItem('beta_unlocked')) {
           setScreen('app');
         } else {
